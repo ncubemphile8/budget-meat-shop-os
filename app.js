@@ -380,6 +380,9 @@
     else if(a==="open-nav"){ui.mobileNav=true;render();}
     else if(a==="close-modal"){if(!e.target.closest("[data-modal-card]"))closeModal();else if(b.dataset.action==="close-modal")closeModal();}
     else if(a==="new-order")openModal("order");
+    else if(a==="pos-add"){const sku=id,p=data.inventory.find(x=>x.branch===ui.posBranch&&x.sku===sku);if(p){if((ui.cart[sku]||0)+1>p.qty){notify("Basket quantity exceeds stock on hand.","error");return;}ui.cart[sku]=(ui.cart[sku]||0)+1;render();}}
+    else if(a==="pos-dec"){const sku=id;if(ui.cart[sku]){ui.cart[sku]-=1;if(ui.cart[sku]<=0)delete ui.cart[sku];render();}}
+    else if(a==="pos-checkout")completePosSale();
     else if(a==="receive-stock")openModal("stock");
     else if(a==="adjust-stock")openModal("adjust");
     else if(a==="waste-stock")openModal("waste");
@@ -410,6 +413,8 @@
   root.addEventListener("change",function(e){
     const t=e.target;
     if(t.matches("[data-change='branch-filter']")){data.activeBranch=t.value;ui.search="";render();}
+    else if(t.matches("[data-change='pos-branch']")){ui.posBranch=t.value;ui.cart={};render();}
+    else if(t.matches("[data-change='pos-payment']")){ui.posPayment=t.value;}
     else if(t.matches("[data-change='inventory-filter']")){ui.inventoryFilter=t.value;render();}
     else if(t.matches("[data-change='order-filter']")){ui.orderFilter=t.value;render();}
     else if(t.matches("[data-change='alert-filter']")){ui.alertFilter=t.value;render();}
