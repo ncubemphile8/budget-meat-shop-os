@@ -11,7 +11,7 @@
   ];
   const ROLE_LIST = ["Owner","Group Manager","Branch Manager","Stock Controller","Cashier","Dispatch","Accountant","Viewer"];
   const NAV = [
-    {section:"WORKSPACE",items:[["overview","layout-dashboard","Overview"],["branches","map-pin","Branch operations"],["inventory","package","Inventory & stock"],["orders","shopping-bag","Orders & sales"],["delivery","truck","Delivery & dispatch"]]},
+    {section:"WORKSPACE",items:[["overview","layout-dashboard","Overview"],["branches","map-pin","Branch operations"],["inventory","package","Inventory & stock"],["pos","monitor-dot","Point of sale"],["orders","shopping-bag","Orders & sales"],["delivery","truck","Delivery & dispatch"]]},
     {section:"BUSINESS",items:[["suppliers","warehouse","Suppliers & purchasing"],["staff","users","Staff & access"],["finance","wallet","Finance"],["reports","chart-no-axes-combined","Reports & insights"]]},
     {section:"CONTROL",items:[["alerts","bell-ring","Alerts & activity"],["promotions","badge-percent","Promotions"],["settings","settings-2","Settings"]]}
   ];
@@ -103,7 +103,7 @@
     return clone(SEED);
   }
   let data=loadState();
-  let ui={page:"overview",search:"",modal:"",modalData:null,toast:"",toastType:"success",selectedOrder:null,selectedDelivery:null,inventoryFilter:"all",orderFilter:"all",alertFilter:"open",mobileNav:false,loading:false,range:"Today"};
+  let ui={page:"overview",search:"",modal:"",modalData:null,toast:"",toastType:"success",selectedOrder:null,selectedDelivery:null,inventoryFilter:"all",orderFilter:"all",alertFilter:"open",mobileNav:false,loading:false,range:"Today",posBranch:"fort",cart:{},posPayment:"Cash",aiAnswer:"",aiQuery:""};
   const $=s=>document.querySelector(s);
   const root=$("#app");
   const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
@@ -117,9 +117,9 @@
   function lowStock(){return data.inventory.filter(x=>x.qty<=x.threshold);}
   function nearExpiry(){return data.inventory.filter(x=>x.expiry && (new Date(x.expiry+"T00:00:00")-new Date("2026-10-26T00:00:00"))/86400000<=2);}
   function selectedInventory(){return data.inventory.filter(x=>(data.activeBranch==="all"||x.branch===data.activeBranch)&&(!ui.search||[x.name,x.sku,x.category,x.batch,branchName(x.branch)].join(" ").toLowerCase().includes(ui.search.toLowerCase())));}
-  function selectedOrders(){return data.orders.filter(x=>(data.activeBranch==="all"||x.branch===data.activeBranch)&&(!ui.search||[x.id,x.customer,x.items,x.source,branchName(x.branch)].join(" ").toLowerCase().includes(ui.search.toLowerCase()))&&(ui.orderFilter==="all"||x.status.toLowerCase().includes(ui.orderFilter.toLowerCase())));}
-  function salesOf(id){return id==="all"?[982,724,1106].reduce((a,b)=>a+b,0):({fort:982,takawira:724,lobengula:1106}[id]||0);}
-  function ordersOf(id){return id==="all"?122:({fort:42,takawira:31,lobengula:49}[id]||0);}
+  function selectedOrders(){return data.orders.filter(x=>(data.activeBranch==="all"||x.branch===data.activeBranch)&&(!ui.search||[x.id,x.customer,x.items,x.source,branchName(x.branch)].join(" ").toLowerCase().includes(ui.search.toLowerCase()))&&(ui.orderFilter==="all"||(ui.orderFilter==="Payment"?/review|awaiting payment/i.test(x.payment):x.status.toLowerCase().includes(ui.orderFilter.toLowerCase()))));}
+  function salesOf(id){const base=id==="all"?2812:({fort:982,takawira:724,lobengula:1106}[id]||0);const extra=data.extraSales||{};return base+(id==="all"?BRANCHES.reduce((sum,b)=>sum+Number(extra[b.id]||0),0):Number(extra[id]||0));}
+  function ordersOf(id){const base=id==="all"?122:({fort:42,takawira:31,lobengula:49}[id]||0);const extra=data.extraOrderCounts||{};return base+(id==="all"?BRANCHES.reduce((sum,b)=>sum+Number(extra[b.id]||0),0):Number(extra[id]||0));}
   function inventoryValue(id){return data.inventory.filter(x=>id==="all"||x.branch===id).reduce((s,x)=>s+x.qty*x.cost,0);}
   function weightTotal(id){return data.inventory.filter(x=>(id==="all"||x.branch===id)&&x.unit==="kg").reduce((s,x)=>s+x.qty,0);}
   function branchSelect(){return '<select class="branch-select" data-change="branch-filter" aria-label="Choose branch"><option value="all" '+(data.activeBranch==="all"?"selected":"")+'>All branches</option>'+BRANCHES.map(b=>'<option value="'+b.id+'" '+(data.activeBranch===b.id?"selected":"")+'>'+esc(b.name)+'</option>').join("")+'</select>';}
@@ -255,7 +255,7 @@
     return '<div class="modal-scrim" data-action="close-modal"><section class="modal-card '+(ui.modal==="order-detail"||ui.modal==="delivery-detail"?"modal-wide":"")+'" role="dialog" aria-modal="true" aria-label="'+esc(title)+'" data-modal-card><div class="modal-head"><div><span class="panel-kicker">BUDGETOS WORKFLOW</span><h3>'+esc(title)+'</h3></div><button class="icon-btn" data-action="close-modal" aria-label="Close">'+icon("x")+'</button></div>'+body+'</section></div>';
   }
   function render(){
-    const pages={overview:overviewPage,branches:branchesPage,inventory:inventoryPage,orders:ordersPage,delivery:deliveryPage,suppliers:suppliersPage,staff:staffPage,finance:financePage,reports:reportsPage,alerts:alertsPage,promotions:promotionsPage,settings:settingsPage};
+    const pages={overview:overviewPage,branches:branchesPage,inventory:inventoryPage,pos:posPage,orders:ordersPage,delivery:deliveryPage,suppliers:suppliersPage,staff:staffPage,finance:financePage,reports:reportsPage,alerts:alertsPage,promotions:promotionsPage,settings:settingsPage};
     root.innerHTML=sidebar()+'<div class="app-main">'+header()+'<main class="page-content page-'+ui.page+'">'+(pages[ui.page]||overviewPage)()+'<footer class="app-footer"><span>© 2026 BudgetOS concept</span><span><i class="footer-dot"></i> Demo data · no live store connection</span><a href="https://vanillawebz.co.za" target="_blank" rel="noreferrer">Built for consideration by VanillaWebz</a></footer></main></div>'+(ui.modal?modalContent():"")+(ui.toast?'<div id="toast" class="toast '+ui.toastType+'"><span>'+icon(ui.toastType==="error"?"alert-circle":"check-circle-2")+'</span>'+esc(ui.toast)+'</div>':"")+(ui.loading?'<div class="route-loader"><div class="loader-logo"><img src="'+LOGO+'" alt="Budget Meat Shop logo"></div><span class="loader-line"></span><p>Preparing workspace</p></div>':"");
     if(window.lucide&&window.lucide.createIcons)window.lucide.createIcons();
     const v=$(".hero-video"); if(v){v.play().catch(()=>{});}
