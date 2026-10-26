@@ -260,10 +260,15 @@
     } else if(ui.modal==="promo"){
       title="Create promotion";
       body='<form data-form="promo"><div class="form-grid"><label class="span-2">Campaign name<input name="name" required placeholder="e.g. Weekend Braai Bundle"></label><label>Promo code<input name="code" required placeholder="BRAAI10"></label><label>Offer description<input name="discount" required placeholder="10% off selected bundle"></label><label>Status<select name="status"><option>Scheduled</option><option>Active</option><option>Paused</option></select></label></div><div class="modal-foot"><button type="button" class="btn btn-light" data-action="close-modal">Cancel</button><button class="btn btn-primary" type="submit">Create campaign</button></div></form>';
+    } else if(ui.modal==="packed"){
+      const o=data.orders.find(x=>x.id===ui.modalData);if(!o||!o.sku)return "";
+      const p=data.inventory.find(x=>x.sku===o.sku&&x.branch===o.branch);
+      title="Confirm packed quantity";
+      body='<p class="form-hint">Enter the actual quantity packed. The order total is recalculated using its recorded unit selling price. The stock ledger is reduced when the order is packed or dispatched.</p><form data-form="packed"><div class="form-grid"><label class="span-2">Product<input value="'+esc(p?p.name:o.items)+'" disabled></label><label>Actual packed quantity ('+esc(p?p.unit:"unit")+')<input name="qty" type="number" step="0.1" min="0.1" value="'+(o.packedQty||o.qty||1)+'" required></label><label>Unit selling price<input value="'+money(o.unitPrice||(p&&p.price)||0)+'" disabled></label></div><div class="modal-foot"><button type="button" class="btn btn-light" data-action="close-modal">Cancel</button><button class="btn btn-primary" type="submit">Save & recalculate</button></div></form>';
     } else if(ui.modal==="order-detail"){
       const o=data.orders.find(x=>x.id===ui.modalData); if(!o)return "";
       title="Order "+o.id;
-      body='<div class="order-detail-summary"><span class="source-tag">'+icon("shopping-bag")+' '+esc(o.source)+'</span>'+statusPill(o.status)+'<strong class="order-detail-total">'+money(o.total)+'</strong></div><div class="detail-data-grid"><div><small>CUSTOMER</small><strong>'+esc(o.customer)+'</strong><span>'+esc(o.phone)+'</span></div><div><small>BRANCH</small><strong>'+esc(branchName(o.branch))+'</strong><span>'+esc(branch(o.branch).address)+'</span></div><div><small>ITEMS</small><strong>'+esc(o.items)+'</strong><span>Actual packed weight must be confirmed.</span></div><div><small>PAYMENT</small><strong>'+esc(o.payment)+'</strong><span>Gateway verification not connected.</span></div></div><label class="modal-field-label">Update fulfilment status<select class="control-select" data-order-status="'+o.id+'">'+orderStatuses().map(s=>'<option '+(o.status===s?"selected":"")+'>'+s+'</option>').join("")+'</select></label><div class="modal-foot"><button class="btn btn-light" data-action="close-modal">Close</button><button class="btn btn-primary" data-action="advance-order" data-id="'+o.id+'">Advance workflow '+icon("arrow-right")+'</button></div>';
+      body='<div class="order-detail-summary"><span class="source-tag">'+icon("shopping-bag")+' '+esc(o.source)+'</span>'+statusPill(o.status)+'<strong class="order-detail-total">'+money(o.total)+'</strong></div><div class="detail-data-grid"><div><small>CUSTOMER</small><strong>'+esc(o.customer)+'</strong><span>'+esc(o.phone)+'</span></div><div><small>BRANCH</small><strong>'+esc(branchName(o.branch))+'</strong><span>'+esc(branch(o.branch).address)+'</span></div><div><small>ITEMS / WEIGHT</small><strong>'+esc(o.items)+'</strong><span>'+(o.packedQty?"Packed quantity recorded: "+num(o.packedQty):"Confirm the actual packed weight before fulfilment.")+'</span></div><div><small>PAYMENT</small><strong>'+esc(o.payment)+'</strong><span>Gateway verification not connected.</span></div></div>'+(o.sku?'<button class="btn btn-light" data-action="edit-packed" data-id="'+o.id+'">'+icon("scale")+' Confirm packed weight & recalculate</button>':"")+'<label class="modal-field-label">Update fulfilment status<select class="control-select" data-order-status="'+o.id+'">'+orderStatuses().map(s=>'<option '+(o.status===s?"selected":"")+'>'+s+'</option>').join("")+'</select></label><div class="modal-foot"><button class="btn btn-light" data-action="close-modal">Close</button><button class="btn btn-primary" data-action="advance-order" data-id="'+o.id+'">Advance workflow '+icon("arrow-right")+'</button></div>';
     } else if(ui.modal==="delivery-detail"){
       const d=data.deliveries.find(x=>x.id===ui.modalData);if(!d)return "";
       title="Delivery "+d.id;
@@ -353,6 +358,13 @@
       data.orders.unshift(o);data.extraOrderCounts=data.extraOrderCounts||{};data.extraOrderCounts[o.branch]=(data.extraOrderCounts[o.branch]||0)+1;if(o.payment==="Paid"){data.extraSales=data.extraSales||{};data.extraSales[o.branch]=(data.extraSales[o.branch]||0)+o.total;}
       if(o.delivery)data.deliveries.unshift({id:"D-"+(303+data.deliveries.length),order:o.id,branch:o.branch,customer:o.customer,area:o.area,driver:"Unassigned",window:"Schedule required",status:"Awaiting assignment",fee:total>=data.deliveryThreshold?0:data.standardDeliveryFee,updated:"Just now"});
       createMovement("New order "+orderId+" created",o.branch,"Order");save();closeModal();notify("Order "+orderId+" created.");
+    } else if(type==="packed"){
+      const o=data.orders.find(x=>x.id===ui.modalData),qty=Number(f.qty);
+      if(!o||!o.sku||!Number.isFinite(qty)||qty<=0){notify("Enter a valid packed quantity.","error");return;}
+      const product=data.inventory.find(x=>x.sku===o.sku&&x.branch===o.branch),available=product?product.qty:0;
+      if(!o.stockDeducted&&qty>available){notify("Packed quantity exceeds stock on hand at this branch.","error");return;}
+      const unitPrice=Number(o.unitPrice||(product&&product.price)||0);o.packedQty=Number(qty.toFixed(2));o.total=Number((qty*unitPrice).toFixed(2));o.items=(product?product.name:"Product")+" · "+num(qty)+" "+(product?product.unit:"unit")+" (packed)";
+      data.activity.unshift({title:"Actual packed quantity recorded for "+o.id,who:branchName(o.branch)+" · Operations",time:"Just now"});save();closeModal();notify("Packed quantity saved; order total recalculated.");
     } else if(type==="expense"){
       const amount=Number(f.amount);if(amount<=0){notify("Enter a valid amount.","error");return;}
       data.expenses.unshift({id:"EX-"+(121+data.expenses.length),branch:f.branch,category:f.category,amount:amount,note:f.note,date:"26 Oct"});data.activity.unshift({title:"Expense recorded · "+money(amount),who:branchName(f.branch)+" · "+f.category,time:"Just now"});save();closeModal();notify("Expense recorded.");
@@ -403,6 +415,7 @@
     else if(a==="edit-settings")openModal("settings");
     else if(a==="new-promo")openModal("promo");
     else if(a==="view-order")openModal("order-detail",id);
+    else if(a==="edit-packed")openModal("packed",id);
     else if(a==="view-delivery")openModal("delivery-detail",id);
     else if(a==="advance-order"){const o=data.orders.find(x=>x.id===id);if(o)updateOrder(id,nextOrderStatus(o.status));}
     else if(a==="advance-delivery"){const d=data.deliveries.find(x=>x.id===id);if(d){if(d.status==="Awaiting assignment"&&d.driver==="Unassigned"){notify("Assign a driver before advancing delivery.","error");return;}let nxt=d.status==="Awaiting assignment"?"Assigned":d.status==="Assigned"?"Preparing":d.status==="Preparing"?"Out for delivery":d.status==="Out for delivery"?"Delivered":"Delivered";updateDelivery(id,nxt);}}
