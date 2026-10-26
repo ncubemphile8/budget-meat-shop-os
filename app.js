@@ -361,6 +361,7 @@
         createMovement("Transfer "+qty+" "+src.unit+" "+src.name+" · "+branchName(f.from)+" → "+branchName(f.to),f.from,"Transfer");closeModal();save();notify("Stock transfer recorded at both branches.");return;
       }
       const target=data.inventory.find(x=>x.sku===f.sku&&x.branch===f.branch)||product;
+      if(f.unit&&target.unit!==f.unit){notify("This product is tracked in "+target.unit+". Choose the matching unit before saving.","error");return;}
       if(type==="waste"&&target.qty<qty){notify("Wastage cannot exceed stock on hand.","error");return;}
       if(type==="waste"){target.qty=Number((target.qty-qty).toFixed(2));createMovement("Wastage: "+qty+" "+target.unit+" "+target.name+" · "+f.reason,target.branch,"Wastage");}
       else if(type==="adjust"){target.qty=Number(qty.toFixed(2));createMovement("Stock count adjusted: "+target.name+" → "+qty+" "+target.unit+" · "+f.reason,target.branch,"Adjustment");}
@@ -369,10 +370,10 @@
     } else if(type==="order"){
       const prod=data.inventory.find(x=>x.sku===f.sku&&x.branch===f.branch),qty=Number(f.qty);if(!prod||qty<=0){notify("Check product, branch and quantity.","error");return;}if(prod.qty<qty){notify("Requested quantity exceeds the selected branch stock on hand.","error");return;}
       const orderId="BMS-"+(1050+data.orders.length).toString();
-      const total=Number((prod.price*qty).toFixed(2));
-      const o={id:orderId,customer:f.customer,phone:"Not captured",branch:f.branch,items:prod.name+" · "+qty+" "+prod.unit,total:total,status:"Received",payment:f.payment,source:f.source,time:new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}),area:f.area||"Not set",delivery:f.delivery==="yes",sku:prod.sku,qty:qty,unitPrice:prod.price,originalEstimate:total,stockDeducted:false,dashboardRevenueCounted:f.payment==="Paid"};
+      const subtotal=Number((prod.price*qty).toFixed(2)),deliveryFee=f.delivery==="yes"&&subtotal<data.deliveryThreshold?Number(data.standardDeliveryFee||0):0,total=Number((subtotal+deliveryFee).toFixed(2));
+      const o={id:orderId,customer:f.customer,phone:"Not captured",branch:f.branch,items:prod.name+" · "+qty+" "+prod.unit,total:total,itemSubtotal:subtotal,deliveryFee:deliveryFee,status:"Received",payment:f.payment,source:f.source,time:new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}),area:f.area||"Not set",delivery:f.delivery==="yes",sku:prod.sku,qty:qty,unitPrice:prod.price,originalEstimate:total,stockDeducted:false,dashboardRevenueCounted:f.payment==="Paid"};
       data.orders.unshift(o);data.extraOrderCounts=data.extraOrderCounts||{};data.extraOrderCounts[o.branch]=(data.extraOrderCounts[o.branch]||0)+1;if(o.payment==="Paid"){data.extraSales=data.extraSales||{};data.extraSales[o.branch]=(data.extraSales[o.branch]||0)+o.total;}
-      if(o.delivery)data.deliveries.unshift({id:"D-"+(303+data.deliveries.length),order:o.id,branch:o.branch,customer:o.customer,area:o.area,driver:"Unassigned",window:"Schedule required",status:"Awaiting assignment",fee:total>=data.deliveryThreshold?0:data.standardDeliveryFee,updated:"Just now"});
+      if(o.delivery)data.deliveries.unshift({id:"D-"+(303+data.deliveries.length),order:o.id,branch:o.branch,customer:o.customer,area:o.area,driver:"Unassigned",window:"Schedule required",status:"Awaiting assignment",fee:deliveryFee,updated:"Just now"});
       createMovement("New order "+orderId+" created",o.branch,"Order");save();closeModal();notify("Order "+orderId+" created.");
     } else if(type==="assistant"){
       ui.aiQuery=String(f.query||"");ui.aiAnswer=answerQuestion(ui.aiQuery);render();
@@ -383,7 +384,7 @@
       if(!o.stockDeducted&&qty>available){notify("Packed quantity exceeds stock on hand at this branch.","error");return;}
       const priorQty=Number(o.packedQty||o.qty||0);
       if(o.stockDeducted&&product&&qty!==priorQty){const delta=Number((priorQty-qty).toFixed(2));if(delta<0&&product.qty<Math.abs(delta)){notify("The extra packed weight exceeds remaining stock at this branch.","error");return;}product.qty=Number((product.qty+delta).toFixed(2));createMovement("Packed-weight variance on "+o.id+": "+priorQty+" → "+qty+" "+product.unit,o.branch,"Adjustment");syncStockAlerts();}
-      const unitPrice=Number(o.unitPrice||(product&&product.price)||0);o.packedQty=Number(qty.toFixed(2));o.total=Number((qty*unitPrice).toFixed(2));o.items=(product?product.name:"Product")+" · "+num(qty)+" "+(product?product.unit:"unit")+" (packed)";
+      const unitPrice=Number(o.unitPrice||(product&&product.price)||0);o.packedQty=Number(qty.toFixed(2));o.itemSubtotal=Number((qty*unitPrice).toFixed(2));o.deliveryFee=o.delivery?(o.itemSubtotal<data.deliveryThreshold?Number(data.standardDeliveryFee||0):0):0;o.total=Number((o.itemSubtotal+o.deliveryFee).toFixed(2));const relatedDelivery=data.deliveries.find(d=>d.order===o.id);if(relatedDelivery)relatedDelivery.fee=o.deliveryFee;o.items=(product?product.name:"Product")+" · "+num(qty)+" "+(product?product.unit:"unit")+" (packed)";
       data.activity.unshift({title:"Actual packed quantity recorded for "+o.id,who:branchName(o.branch)+" · Operations",time:"Just now"});save();closeModal();notify("Packed quantity saved; order total recalculated.");
     } else if(type==="expense"){
       const amount=Number(f.amount);if(amount<=0){notify("Enter a valid amount.","error");return;}
