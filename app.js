@@ -260,6 +260,9 @@
     } else if(ui.modal==="expense"){
       title="Record an expense";
       body='<form data-form="expense"><div class="form-grid"><label>Branch<select name="branch" required>'+branchOptions+'</select></label><label>Category<select name="category"><option>Packaging</option><option>Utilities</option><option>Transport</option><option>Cleaning</option><option>Repairs</option><option>Other</option></select></label><label>Amount (USD)<input name="amount" type="number" min="0.01" step="0.01" required></label><label class="span-2">Description<input name="note" required placeholder="Expense description / reference"></label></div><div class="modal-foot"><button type="button" class="btn btn-light" data-action="close-modal">Cancel</button><button class="btn btn-primary" type="submit">Save expense</button></div></form>';
+    } else if(ui.modal==="customer"){
+      title="Add customer profile";
+      body='<form data-form="customer"><div class="form-grid"><label>Customer name<input name="name" required placeholder="Customer name"></label><label>Phone number<input name="phone" placeholder="+263…"></label><label class="span-2">Email address<input name="email" type="email" placeholder="customer@example.com"></label><label class="span-2 consent-field"><span><input name="marketingConsent" type="checkbox" value="yes"> Customer explicitly opted in to marketing</span><small>Leave unchecked unless the customer has given consent. Consent capture is only demo behaviour in this prototype.</small></label></div><div class="modal-foot"><button type="button" class="btn btn-light" data-action="close-modal">Cancel</button><button class="btn btn-primary" type="submit">Create profile</button></div></form>';
     } else if(ui.modal==="staff"){
       title="Add team member";
       body='<form data-form="staff"><div class="form-grid"><label>Full name<input name="name" required placeholder="First and last name"></label><label>Role<select name="role">'+ROLE_LIST.map(r=>'<option>'+r+'</option>').join("")+'</select></label><label class="span-2">Assigned branch<select name="branch"><option value="all">All branches / group</option>'+branchOptions+'</select></label><label>Status<select name="status"><option>Active</option><option>On shift</option></select></label></div><p class="form-hint">Demo roster only; the form does not create login credentials.</p><div class="modal-foot"><button type="button" class="btn btn-light" data-action="close-modal">Cancel</button><button class="btn btn-primary" type="submit">Add to roster</button></div></form>';
@@ -401,6 +404,10 @@
     } else if(type==="expense"){
       const amount=Number(f.amount);if(amount<=0){notify("Enter a valid amount.","error");return;}
       data.expenses.unshift({id:"EX-"+(121+data.expenses.length),branch:f.branch,category:f.category,amount:amount,note:f.note,date:"26 Oct"});data.activity.unshift({title:"Expense recorded · "+money(amount),who:branchName(f.branch)+" · "+f.category,time:"Just now"});save();closeModal();notify("Expense recorded.");
+    } else if(type==="customer"){
+      const name=String(f.name||"").trim();if(!name){notify("Enter the customer name.","error");return;}
+      data.customers.unshift({id:"CU-"+String(6+data.customers.length).padStart(2,"0"),name:name,phone:f.phone||"Not captured",email:f.email||"",orders:0,spend:0,points:0,lastOrder:"No order",consent:f.marketingConsent==="yes"});
+      data.activity.unshift({title:"Customer profile created · "+name,who:"Customer records · Operations",time:"Just now"});save();closeModal();notify("Customer profile created in demo workspace.");
     } else if(type==="staff"){
       data.staff.push({id:"ST-"+String(data.staff.length+1).padStart(2,"0"),name:f.name,role:f.role,branch:f.branch,status:f.status,last:"Just now"});save();closeModal();notify("Team member added to demo roster. No account was created.");
     } else if(type==="po"){
@@ -446,6 +453,8 @@
     else if(a==="transfer-stock")openModal("transfer");
     else if(a==="add-expense")openModal("expense");
     else if(a==="add-staff")openModal("staff");
+    else if(a==="add-customer")openModal("customer");
+    else if(a==="toggle-consent"){const c=data.customers.find(x=>x.id===id);if(c){c.consent=!c.consent;data.activity.unshift({title:"Marketing consent "+(c.consent?"recorded":"withdrawn")+" for "+c.name,who:"Customer records · Operations",time:"Just now"});save();notify(c.consent?"Opt-in recorded in demo.":"Opt-out recorded in demo.");}}
     else if(a==="new-po")openModal("po");
     else if(a==="edit-settings")openModal("settings");
     else if(a==="new-promo")openModal("promo");
