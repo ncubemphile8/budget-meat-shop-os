@@ -12,7 +12,7 @@
   const ROLE_LIST = ["Owner","Group Manager","Branch Manager","Stock Controller","Cashier","Dispatch","Accountant","Viewer"];
   const NAV = [
     {section:"WORKSPACE",items:[["overview","layout-dashboard","Overview"],["branches","map-pin","Branch operations"],["inventory","package","Inventory & stock"],["pos","monitor-dot","Point of sale"],["orders","shopping-bag","Orders & sales"],["delivery","truck","Delivery & dispatch"]]},
-    {section:"BUSINESS",items:[["suppliers","warehouse","Suppliers & purchasing"],["staff","users","Staff & access"],["finance","wallet","Finance"],["reports","chart-no-axes-combined","Reports & insights"]]},
+    {section:"BUSINESS",items:[["suppliers","warehouse","Suppliers & purchasing"],["customers","contact-round","Customers & loyalty"],["staff","users","Staff & access"],["finance","wallet","Finance"],["reports","chart-no-axes-combined","Reports & insights"]]},
     {section:"CONTROL",items:[["alerts","bell-ring","Alerts & activity"],["promotions","badge-percent","Promotions"],["settings","settings-2","Settings"]]}
   ];
   const SEED = {
@@ -54,6 +54,13 @@
       {id:"SUP-01",name:"Matabeleland Meat Supply",contact:"Sales desk",phone:"+263 77 000 1200",terms:"7 days",balance:1260,status:"Active"},
       {id:"SUP-02",name:"Highveld Poultry Partners",contact:"Orders team",phone:"+263 71 000 3200",terms:"Cash on delivery",balance:485,status:"Active"},
       {id:"SUP-03",name:"Cold Chain & Packaging",contact:"Account manager",phone:"+263 78 000 6440",terms:"14 days",balance:210,status:"Active"}
+    ],
+    customers:[
+      {id:"CU-01",name:"J. Moyo",phone:"077 ••• 2041",email:"j.moyo@example.test",orders:8,spend:186.4,points:186,lastOrder:"24 Oct",consent:true},
+      {id:"CU-02",name:"P. Sibanda",phone:"077 ••• 1128",email:"p.sibanda@example.test",orders:5,spend:142.75,points:142,lastOrder:"22 Oct",consent:true},
+      {id:"CU-03",name:"T. Ndlovu",phone:"071 ••• 7460",email:"t.ndlovu@example.test",orders:3,spend:64.5,points:64,lastOrder:"20 Oct",consent:false},
+      {id:"CU-04",name:"A. Dube",phone:"071 ••• 3321",email:"a.dube@example.test",orders:2,spend:38.9,points:38,lastOrder:"18 Oct",consent:false},
+      {id:"CU-05",name:"K. Ncube",phone:"071 ••• 6310",email:"k.ncube@example.test",orders:11,spend:324.2,points:324,lastOrder:"26 Oct",consent:true}
     ],
     purchaseOrders:[
       {id:"PO-021",supplier:"Matabeleland Meat Supply",branch:"fort",item:"Beef cuts",qty:80,unit:"kg",amount:249.6,status:"Awaiting delivery",date:"26 Oct"},
