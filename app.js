@@ -271,7 +271,7 @@
     } else if(ui.modal==="order-detail"){
       const o=data.orders.find(x=>x.id===ui.modalData); if(!o)return "";
       title="Order "+o.id;
-      body='<div class="order-detail-summary"><span class="source-tag">'+icon("shopping-bag")+' '+esc(o.source)+'</span>'+statusPill(o.status)+'<strong class="order-detail-total">'+money(o.total)+'</strong></div><div class="detail-data-grid"><div><small>CUSTOMER</small><strong>'+esc(o.customer)+'</strong><span>'+esc(o.phone)+'</span></div><div><small>BRANCH</small><strong>'+esc(branchName(o.branch))+'</strong><span>'+esc(branch(o.branch).address)+'</span></div><div><small>ITEMS / WEIGHT</small><strong>'+esc(o.items)+'</strong><span>'+(o.packedQty?"Packed quantity recorded: "+num(o.packedQty):"Confirm the actual packed weight before fulfilment.")+'</span></div><div><small>PAYMENT</small><strong>'+esc(o.payment)+'</strong><span>Gateway verification not connected.</span></div></div>'+(o.sku?'<button class="btn btn-light" data-action="edit-packed" data-id="'+o.id+'">'+icon("scale")+' Confirm packed weight & recalculate</button>':"")+'<label class="modal-field-label">Update fulfilment status<select class="control-select" data-order-status="'+o.id+'">'+orderStatuses().map(s=>'<option '+(o.status===s?"selected":"")+'>'+s+'</option>').join("")+'</select></label><div class="modal-foot"><button class="btn btn-light" data-action="close-modal">Close</button><button class="btn btn-primary" data-action="advance-order" data-id="'+o.id+'">Advance workflow '+icon("arrow-right")+'</button></div>';
+      body='<div class="order-detail-summary"><span class="source-tag">'+icon("shopping-bag")+' '+esc(o.source)+'</span>'+statusPill(o.status)+'<strong class="order-detail-total">'+money(o.total)+'</strong></div><div class="detail-data-grid"><div><small>CUSTOMER</small><strong>'+esc(o.customer)+'</strong><span>'+esc(o.phone)+'</span></div><div><small>BRANCH</small><strong>'+esc(branchName(o.branch))+'</strong><span>'+esc(branch(o.branch).address)+'</span></div><div><small>ITEMS / WEIGHT</small><strong>'+esc(o.items)+'</strong><span>'+(o.packedQty?"Packed quantity recorded: "+num(o.packedQty):"Confirm the actual packed weight before fulfilment.")+'</span></div><div><small>PAYMENT</small><strong>'+esc(o.payment)+'</strong><span>Gateway verification not connected.</span></div></div><label class="modal-field-label">Payment status<select class="control-select" data-order-payment="'+o.id+'">'+["Awaiting payment","Payment review","Paid","Failed","Refunded"].map(p=>'<option '+(o.payment===p?"selected":"")+'>'+p+'</option>').join("")+'</select></label>'+(o.sku?'<button class="btn btn-light" data-action="edit-packed" data-id="'+o.id+'">'+icon("scale")+' Confirm packed weight & recalculate</button>':"")+'<label class="modal-field-label">Update fulfilment status<select class="control-select" data-order-status="'+o.id+'">'+orderStatuses().map(s=>'<option '+(o.status===s?"selected":"")+'>'+s+'</option>').join("")+'</select></label><div class="modal-foot"><button class="btn btn-light" data-action="close-modal">Close</button><button class="btn btn-primary" data-action="advance-order" data-id="'+o.id+'">Advance workflow '+icon("arrow-right")+'</button></div>';
     } else if(ui.modal==="delivery-detail"){
       const d=data.deliveries.find(x=>x.id===ui.modalData);if(!d)return "";
       title="Delivery "+d.id;
@@ -329,8 +329,11 @@
   function updateDelivery(id,status){
     const d=data.deliveries.find(x=>x.id===id);if(!d)return;
     if(status==="Assigned"&&d.driver==="Unassigned"){notify("Assign a driver before dispatch.","error");return;}
+    const o=data.orders.find(x=>x.id===d.order);
+    if(o&&(status==="Out for delivery"||status==="Delivered")&&!applyOrderStock(o))return;
     d.status=status;d.updated="Just now";
-    const o=data.orders.find(x=>x.id===d.order);if(o&&status==="Out for delivery"){if(!applyOrderStock(o))return;o.status=status;}if(o&&status==="Delivered"){if(!applyOrderStock(o))return;o.status="Delivered";o.delivery=false;}
+    if(o&&status==="Out for delivery")o.status=status;
+    if(o&&status==="Delivered"){o.status="Delivered";o.delivery=false;}
     data.activity.unshift({title:"Delivery "+id+" updated to "+status,who:branchName(d.branch)+" · Dispatch",time:"Just now"});
     save();closeModal();notify("Delivery "+id+" updated.");
   }
@@ -460,6 +463,7 @@
     else if(t.matches("[data-change='alert-filter']")){ui.alertFilter=t.value;render();}
     else if(t.matches("[data-change='range']")){ui.range=t.value;notify("Report range set to "+t.value+". Demo values remain illustrative.");}
     else if(t.matches("[data-order-status]")){updateOrder(t.dataset.orderStatus,t.value);}
+    else if(t.matches("[data-order-payment]")){const order=data.orders.find(x=>x.id===t.dataset.orderPayment);if(order){const wasPaid=order.payment==="Paid",isPaid=t.value==="Paid";if(wasPaid!==isPaid){data.extraSales=data.extraSales||{};data.extraSales[order.branch]=(data.extraSales[order.branch]||0)+(isPaid?order.total:-order.total);}order.payment=t.value;data.activity.unshift({title:"Payment status for "+order.id+" set to "+t.value,who:branchName(order.branch)+" · Finance",time:"Just now"});save();notify("Payment status updated. Processor verification is not connected.");}}
     else if(t.matches("[data-driver]")){const d=data.deliveries.find(x=>x.id===t.dataset.driver);if(d){d.driver=t.value;if(t.value!=="Unassigned"&&d.status==="Awaiting assignment")d.status="Assigned";d.updated="Just now";const o=data.orders.find(x=>x.id===d.order);if(o&&d.status==="Assigned")o.status="Confirmed";save();notify("Driver assignment updated for "+d.id+".");}}
   });
   root.addEventListener("change",function(e){const t=e.target;if(t.matches("[data-table-search]")){ui.search=t.value;render();const n=$("[data-table-search]");if(n){n.focus();n.setSelectionRange(n.value.length,n.value.length);}}});
