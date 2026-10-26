@@ -287,8 +287,18 @@
   function nextOrderStatus(status){
     const seq=orderStatuses();let i=seq.indexOf(status);return seq[Math.min(i+1,seq.length-2)]||"Completed";
   }
+  function applyOrderStock(o){
+    if(o.stockDeducted)return true;
+    const qty=Number(o.packedQty||o.qty||0);
+    const lines=o.lines||((o.sku&&qty>0)?[{sku:o.sku,qty:qty,name:(data.inventory.find(x=>x.sku===o.sku&&x.branch===o.branch)||{}).name||"Product"}]:[]);
+    if(!lines.length)return true;
+    for(const line of lines){const stock=data.inventory.find(x=>x.sku===line.sku&&x.branch===o.branch);if(!stock||stock.qty<Number(line.qty||0)){notify("Cannot fulfil "+o.id+": stock is insufficient for "+(line.name||"a line item")+".","error");return false;}}
+    for(const line of lines){const stock=data.inventory.find(x=>x.sku===line.sku&&x.branch===o.branch);stock.qty=Number((stock.qty-Number(line.qty||0)).toFixed(2));createMovement("Sale deducted "+line.qty+" "+stock.unit+" "+stock.name+" · "+o.id,o.branch,"Sale");}
+    o.stockDeducted=true;syncStockAlerts();return true;
+  }
   function updateOrder(id,status){
     const o=data.orders.find(x=>x.id===id);if(!o)return;
+    if(["Packed","Out for delivery","Delivered","Completed"].includes(status)&&!applyOrderStock(o))return;
     o.status=status;
     if(status==="Delivered"||status==="Completed"){
       o.delivery=false;
@@ -302,7 +312,7 @@
     const d=data.deliveries.find(x=>x.id===id);if(!d)return;
     if(status==="Assigned"&&d.driver==="Unassigned"){notify("Assign a driver before dispatch.","error");return;}
     d.status=status;d.updated="Just now";
-    const o=data.orders.find(x=>x.id===d.order);if(o&&status==="Out for delivery")o.status=status;if(o&&status==="Delivered"){o.status="Delivered";o.delivery=false;}
+    const o=data.orders.find(x=>x.id===d.order);if(o&&status==="Out for delivery"){if(!applyOrderStock(o))return;o.status=status;}if(o&&status==="Delivered"){if(!applyOrderStock(o))return;o.status="Delivered";o.delivery=false;}
     data.activity.unshift({title:"Delivery "+id+" updated to "+status,who:branchName(d.branch)+" · Dispatch",time:"Just now"});
     save();closeModal();notify("Delivery "+id+" updated.");
   }
@@ -336,11 +346,11 @@
       else {target.qty=Number((target.qty+qty).toFixed(2));createMovement("Received "+qty+" "+target.unit+" "+target.name+" · "+f.reason,target.branch,"Receipt");}
       syncStockAlerts();save();closeModal();notify("Stock ledger updated.");
     } else if(type==="order"){
-      const prod=data.inventory.find(x=>x.sku===f.sku),qty=Number(f.qty);if(!prod||qty<=0){notify("Check product and quantity.","error");return;}
+      const prod=data.inventory.find(x=>x.sku===f.sku&&x.branch===f.branch),qty=Number(f.qty);if(!prod||qty<=0){notify("Check product, branch and quantity.","error");return;}if(prod.qty<qty){notify("Requested quantity exceeds the selected branch stock on hand.","error");return;}
       const orderId="BMS-"+(1050+data.orders.length).toString();
       const total=Number((prod.price*qty).toFixed(2));
-      const o={id:orderId,customer:f.customer,phone:"Not captured",branch:f.branch,items:prod.name+" · "+qty+" "+prod.unit,total:total,status:"Received",payment:f.payment,source:f.source,time:new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}),area:f.area||"Not set",delivery:f.delivery==="yes"};
-      data.orders.unshift(o);
+      const o={id:orderId,customer:f.customer,phone:"Not captured",branch:f.branch,items:prod.name+" · "+qty+" "+prod.unit,total:total,status:"Received",payment:f.payment,source:f.source,time:new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}),area:f.area||"Not set",delivery:f.delivery==="yes",sku:prod.sku,qty:qty,unitPrice:prod.price,originalEstimate:total,stockDeducted:false};
+      data.orders.unshift(o);data.extraOrderCounts=data.extraOrderCounts||{};data.extraOrderCounts[o.branch]=(data.extraOrderCounts[o.branch]||0)+1;if(o.payment==="Paid"){data.extraSales=data.extraSales||{};data.extraSales[o.branch]=(data.extraSales[o.branch]||0)+o.total;}
       if(o.delivery)data.deliveries.unshift({id:"D-"+(303+data.deliveries.length),order:o.id,branch:o.branch,customer:o.customer,area:o.area,driver:"Unassigned",window:"Schedule required",status:"Awaiting assignment",fee:total>=data.deliveryThreshold?0:data.standardDeliveryFee,updated:"Just now"});
       createMovement("New order "+orderId+" created",o.branch,"Order");save();closeModal();notify("Order "+orderId+" created.");
     } else if(type==="expense"){
